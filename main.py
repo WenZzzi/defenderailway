@@ -1,7 +1,7 @@
 import httpx
 import asyncio
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 BOT_TOKEN = os.environ["TG_BOT_TOKEN"]
 CHAT_ID = os.environ["TG_CHAT_ID"]
@@ -15,11 +15,17 @@ async def send_tg(msg: str):
 
 async def check():
     global status
-    now = datetime.utcnow().strftime("%H:%M UTC")
+    now = datetime.now(timezone.utc).strftime("%H:%M UTC")
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.post("https://fred-mcp-server-production-efe8.up.railway.app/mcp")
-        alive = r.status_code not in [502, 503, 504]
+            r = await client.post(
+                "https://fred-mcp-server-production-efe8.up.railway.app/mcp",
+                json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
+                headers={"Content-Type": "application/json"}
+            )
+        # Railway 下线占位页特征：404 且响应含 "train has not arrived"
+        is_railway_404 = r.status_code == 404 and "train has not arrived" in r.text.lower()
+        alive = (r.status_code < 500) and not is_railway_404
     except Exception:
         alive = False
 
